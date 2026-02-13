@@ -1,0 +1,1796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Valentine.als — Mood Sessions</title>
+
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Cormorant+Garamond:ital,wght@1,300;1,400&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
+
+<style>
+/* =====================================================
+   TOKENS & RESET
+===================================================== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#09090c;  --s0:#0d0e12;  --s1:#121520;  --s2:#171b26;
+  --s3:#1c2130;  --edge:#222840;--edge2:#2a3255;--dim:#38435c;
+  --muted:#586080;--body:#c8cdd8;--bright:#edf0f8;
+  --c1:#ff5252;  --c2:#ffb833;  --c3:#2ed4a0;  --c4:#9966ff;  --c5:#ff5fa8;
+  --gold:#c89040;--goldd:rgba(200,144,64,.2);
+
+  /* mood theme hooks (overridden per mood via JS) */
+  --rvbg:#0b0805;
+  --cardbg:rgba(10,7,4,.93);
+  --cardedge:rgba(200,144,64,.20);
+  --accent:#e8b870;
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--body);
+  font-family:'DM Mono',monospace;font-size:12px;-webkit-font-smoothing:antialiased}
+button{font-family:'DM Mono',monospace}
+
+/* scanline */
+body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.025) 0,rgba(0,0,0,.025) 1px,transparent 1px,transparent 3px)}
+
+/* =====================================================
+   SCREENS
+===================================================== */
+#daw{position:fixed;inset:0;display:none;flex-direction:column;z-index:1;transition:opacity .9s ease}
+#daw.out{opacity:0;pointer-events:none}
+#rv{position:fixed;inset:0;z-index:2;background:var(--rvbg);opacity:0;display:none;transition:opacity 1.1s ease}
+#rv.in{display:block}
+#rv.vis{opacity:1}
+
+/* IMPORTANT FIX: only bloom canvases ignore pointer events */
+#cb, #cp { position:fixed; inset:0; pointer-events:none; }
+#cb{z-index:3;display:none}
+#cp{z-index:4;display:none}
+
+/* =====================================================
+   MOOD GATE (FIRST SCREEN)
+===================================================== */
+#moodGate{
+  position:fixed;inset:0;z-index:9998;display:flex;align-items:center;justify-content:center;
+  padding:18px;
+  background:
+    radial-gradient(1200px 600px at 50% 20%, rgba(255,95,168,.14), transparent 60%),
+    rgba(5,6,10,.92);
+  backdrop-filter:blur(10px);
+}
+.mgcard{
+  max-width:820px;width:100%;
+  background:rgba(10,12,18,.92);
+  border:1px solid rgba(255,95,168,.24);
+  border-radius:16px;
+  padding:22px 20px;
+  box-shadow:0 40px 120px rgba(0,0,0,.65);
+}
+.mghead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}
+.mgpre{font-size:10px;letter-spacing:.26em;text-transform:uppercase;color:rgba(255,184,51,.7);margin-bottom:8px}
+.mgh{font-size:22px;color:#edf0f8;line-height:1.35}
+.mgsub{margin-top:10px;font-size:11px;color:rgba(200,205,216,.75);line-height:1.7}
+.mgmeta{font-size:11px;color:rgba(46,212,160,.85);letter-spacing:.08em;white-space:nowrap}
+.mggrid{display:grid;grid-template-columns:repeat(1,minmax(0,1fr));gap:10px;margin-top:14px}
+.mgfoot{margin-top:14px;font-size:10px;color:rgba(130,140,165,.95);line-height:1.65}
+
+.moodBtn{
+  text-align:left;
+  padding:14px 14px;
+  border-radius:12px;
+  border:1px solid rgba(153,102,255,.22);
+  background:linear-gradient(135deg,rgba(255,95,168,.10),rgba(153,102,255,.08));
+  color:#edf0f8;
+  cursor:pointer;
+  transition:.18s;
+  min-height:78px;
+}
+.moodBtn:hover{
+  transform:translateY(-2px);
+  border-color:rgba(255,95,168,.35);
+  background:linear-gradient(135deg,rgba(255,95,168,.18),rgba(153,102,255,.14));
+  box-shadow:0 18px 45px rgba(0,0,0,.45);
+}
+.moodBtn .tag{
+  display:inline-block;
+  font-size:9px;
+  letter-spacing:.22em;
+  text-transform:uppercase;
+  padding:3px 10px;
+  border-radius:999px;
+  border:1px solid rgba(46,212,160,.35);
+  color:rgba(46,212,160,.9);
+  background:rgba(46,212,160,.08);
+  margin-bottom:8px;
+}
+.moodBtn .t{font-size:14px;color:#edf0f8;margin-bottom:4px;}
+.moodBtn .s{font-size:10px;letter-spacing:.06em;color:rgba(200,205,216,.75);line-height:1.6;}
+.mgstartHint{
+  margin-top:10px;
+  font-size:10px;
+  color:rgba(255,184,51,.75);
+  letter-spacing:.08em;
+}
+
+/* =====================================================
+   TITLEBAR
+===================================================== */
+.tbar{height:36px;background:var(--s0);border-bottom:1px solid var(--edge);
+  display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0}
+.dots{display:flex;gap:6px}
+.dot{width:11px;height:11px;border-radius:50%;cursor:pointer;transition:.15s}
+.dot:hover{filter:brightness(1.4)}
+.dot-r{background:#ff5f57}.dot-y{background:#febc2e}.dot-g{background:#28c840}
+.tbar-mid{flex:1;text-align:center;font-size:11px;color:var(--muted);letter-spacing:.2em}
+.tbar-mid strong{color:var(--c5);font-weight:400}
+.tbar-clk{font-size:11px;color:var(--c3);letter-spacing:.08em}
+
+/* =====================================================
+   TRANSPORT
+===================================================== */
+.tr{height:52px;background:var(--s1);border-bottom:1px solid var(--edge);
+  display:flex;align-items:center;padding:0 18px;gap:10px;flex-shrink:0;overflow:hidden}
+.tbtn{width:34px;height:34px;border-radius:6px;border:1px solid var(--edge2);background:var(--s2);
+  color:var(--muted);font-size:13px;cursor:pointer;display:flex;align-items:center;
+  justify-content:center;transition:.13s;flex-shrink:0}
+.tbtn:hover{background:var(--edge2);color:var(--bright)}
+.tbtn.lit{background:var(--c3);border-color:var(--c3);color:#051a10;box-shadow:0 0 14px rgba(46,212,160,.4)}
+.tbtn.flash{background:var(--c1);border-color:var(--c1);color:#fff}
+.tsep{width:1px;height:28px;background:var(--edge);flex-shrink:0}
+/* BPM */
+.bpm-g{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.bpm-tag{font-size:9px;color:var(--dim);letter-spacing:.16em;text-transform:uppercase}
+.bpm-v{font-size:22px;color:var(--c2);min-width:44px;text-align:center;font-variant-numeric:tabular-nums}
+.bpm-a{display:flex;flex-direction:column;gap:2px}
+.bab{width:20px;height:14px;border-radius:3px;border:1px solid var(--edge2);background:var(--s2);
+  color:var(--muted);font-size:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.12s}
+.bab:hover{background:var(--edge2);color:var(--bright)}
+/* Quest pills */
+.qpills{display:flex;gap:5px;align-items:center}
+.qpill{width:9px;height:9px;border-radius:50%;background:var(--edge2);transition:.35s;cursor:default;flex-shrink:0}
+.qpill.done{background:var(--c3);box-shadow:0 0 7px var(--c3)}
+.qpill.now{background:var(--c5);box-shadow:0 0 7px var(--c5);animation:blink 1.2s ease infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+/* VU */
+.vu-g{display:flex;gap:2.5px;align-items:flex-end;height:24px}
+.vu-b{width:4px;border-radius:2px 2px 0 0;background:linear-gradient(to top,var(--c3),var(--c2) 60%,var(--c1));transition:height .07s;min-height:2px}
+/* Export */
+.exp{margin-left:auto;height:34px;padding:0 20px;border-radius:6px;
+  border:1px solid rgba(255,95,168,.35);
+  background:linear-gradient(135deg,rgba(255,95,168,.1),rgba(153,102,255,.1));
+  color:var(--c5);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  cursor:pointer;transition:.2s;opacity:.3;pointer-events:none}
+.exp.go{opacity:1;pointer-events:all;animation:expg 2s ease infinite}
+@keyframes expg{0%,100%{box-shadow:0 0 0 0 rgba(255,95,168,0)}50%{box-shadow:0 0 20px rgba(255,95,168,.45)}}
+.exp.go:hover{background:linear-gradient(135deg,rgba(255,95,168,.28),rgba(153,102,255,.28));border-color:rgba(255,95,168,.7);color:#fff}
+
+/* =====================================================
+   DAW BODY
+===================================================== */
+.dbody{flex:1;display:flex;overflow:hidden}
+.sb{width:44px;flex-shrink:0;background:var(--s0);border-right:1px solid var(--edge);
+  display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:9px}
+.sbi{width:30px;height:30px;border-radius:6px;border:1px solid var(--edge);background:var(--s1);
+  color:var(--dim);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.14s}
+.sbi:hover{background:var(--edge2);color:var(--body)}
+.sbi.on{background:rgba(255,95,168,.14);border-color:rgba(255,95,168,.38);color:var(--c5)}
+.ta{flex:1;display:flex;flex-direction:column;overflow:hidden}
+
+/* ruler */
+.ruler{height:26px;display:flex;flex-shrink:0}
+.rl{width:170px;flex-shrink:0;background:var(--s1);border-right:1px solid var(--edge);
+  border-bottom:1px solid var(--edge);display:flex;align-items:center;padding:0 12px;
+  font-size:8px;color:var(--dim);letter-spacing:.14em;text-transform:uppercase}
+.rb{flex:1;background:var(--s2);border-bottom:1px solid var(--edge);display:flex;align-items:center;padding:0 14px}
+.rm{flex:1;text-align:center;font-size:9px;color:var(--dim)}
+.rm.b1{color:var(--c2)}
+
+.trks{flex:1;overflow-y:auto}
+.trks::-webkit-scrollbar{width:3px}
+.trks::-webkit-scrollbar-thumb{background:var(--edge2);border-radius:2px}
+
+/* =====================================================
+   TRACK ROW
+===================================================== */
+.trk{display:flex;min-height:78px;border-bottom:1px solid var(--edge);animation:trIn .4s ease both}
+@keyframes trIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}
+
+.tlbl{width:170px;flex-shrink:0;background:var(--s1);border-right:1px solid var(--edge);
+  display:flex;align-items:center;padding:0 10px;gap:8px}
+.tacc{width:3px;height:36px;border-radius:2px;flex-shrink:0}
+.tmeta{flex:1;min-width:0}
+.tname{font-size:11px;color:var(--bright)}
+.tsub{font-size:8px;color:var(--dim);margin-top:2px;letter-spacing:.06em}
+.teq{display:flex;gap:2px;align-items:flex-end;height:12px;margin-top:3px;opacity:0;transition:.3s}
+.teq.on{opacity:1}
+.eqb{width:2.5px;border-radius:1px;animation-iteration-count:infinite;animation-timing-function:ease-in-out}
+@keyframes ea{0%,100%{height:2px}50%{height:11px}}
+@keyframes eb{0%,100%{height:9px}50%{height:2px}}
+@keyframes ec{0%,100%{height:5px}50%{height:11px}}
+.eqb:nth-child(1){animation-name:ea;animation-duration:.68s}
+.eqb:nth-child(2){animation-name:eb;animation-duration:.68s;animation-delay:.2s}
+.eqb:nth-child(3){animation-name:ec;animation-duration:.68s;animation-delay:.37s}
+
+/* =====================================================
+   QUEST ZONE
+===================================================== */
+.qzone{flex:1;display:flex;align-items:center;padding:0 16px;background:var(--s2);
+  position:relative;overflow:hidden;gap:12px}
+
+/* lock state */
+.trk.locked .qzone{background:var(--s1)}
+.trk.locked .tlbl{opacity:.4}
+.lockover{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:10px;
+  background:repeating-linear-gradient(45deg,var(--s1) 0,var(--s1) 7px,var(--s2) 7px,var(--s2) 14px)}
+.lockover span:first-child{font-size:16px;opacity:.25}
+.lockover span:last-child{font-size:10px;color:var(--dim);letter-spacing:.1em}
+
+/* quest elements */
+.qchip{font-size:9px;letter-spacing:.18em;text-transform:uppercase;padding:3px 10px;
+  border-radius:20px;border:1px solid;white-space:nowrap;flex-shrink:0}
+
+/* done state clips */
+.done-wrap{display:flex;align-items:center;gap:10px;flex:1}
+.dclip{height:42px;border-radius:5px;display:flex;align-items:center;padding:0 12px;position:relative;overflow:hidden;flex-shrink:0}
+.dclip::before{content:'';position:absolute;inset:0;
+  background:repeating-linear-gradient(90deg,rgba(255,255,255,.045) 0,rgba(255,255,255,.045) 2px,transparent 2px,transparent 8px)}
+.dcname{font-size:10px;color:rgba(0,0,0,.55);position:relative;z-index:1;font-weight:500}
+.dsecret{font-size:11px;color:var(--gold);padding:5px 12px;border-radius:20px;
+  border:1px solid rgba(200,144,64,.25);background:rgba(200,144,64,.07);
+  font-family:'Cormorant Garamond',serif;font-style:italic;white-space:nowrap;letter-spacing:.04em}
+
+/* =====================================================
+   Q1 — RHYTHM TAP
+===================================================== */
+.tap-row{display:flex;gap:5px}
+.tap-cell{width:30px;height:34px;border-radius:5px;border:1px solid var(--edge2);background:var(--s3);
+  display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--dim);
+  transition:.12s;flex-shrink:0;cursor:default}
+.tap-cell.hit{background:var(--c1);border-color:var(--c1);color:#fff;box-shadow:0 0 10px rgba(255,82,82,.55)}
+.tap-cell.miss{background:rgba(255,50,50,.1);border-color:rgba(255,50,50,.3);animation:shk .2s ease}
+@keyframes shk{0%,100%{transform:none}30%{transform:translateX(-3px)}70%{transform:translateX(3px)}}
+.metro-dot{width:10px;height:10px;border-radius:50%;background:var(--dim);transition:.06s;flex-shrink:0}
+.metro-dot.beat{background:var(--c2);box-shadow:0 0 8px var(--c2)}
+.tap-hint{font-size:10px;color:var(--muted);letter-spacing:.04em}
+
+/* =====================================================
+   Q2 — FADER SWEET SPOT
+===================================================== */
+.fader-row{display:flex;align-items:center;gap:14px;flex:1}
+.fader-track{flex:1;height:6px;border-radius:3px;background:var(--edge2);position:relative;cursor:pointer}
+.fader-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--dim),var(--c4));width:0%;transition:width .04s}
+.sweet-zone{position:absolute;top:-4px;height:14px;border-radius:3px;pointer-events:none;
+  background:rgba(46,212,160,.14);border:1px solid rgba(46,212,160,.38)}
+.fader-knob{width:14px;height:24px;border-radius:4px;border:1px solid var(--edge2);background:var(--s3);
+  cursor:grab;position:absolute;top:50%;transform:translate(-50%,-50%);box-shadow:0 2px 8px rgba(0,0,0,.5);transition:background .12s}
+.fader-knob:active{cursor:grabbing;background:var(--edge2)}
+.feel-v{font-size:11px;color:var(--dim);min-width:90px;text-align:right;transition:color .25s;letter-spacing:.04em}
+.feel-v.hot{color:var(--c3)}
+
+/* =====================================================
+   Q3 — MINI PIANO
+===================================================== */
+.piano-wrap{display:flex;align-items:center;gap:14px;flex:1}
+.piano{height:54px;position:relative}
+.pk{width:28px;height:50px;border-radius:0 0 4px 4px;background:#ddd5c0;border:1px solid #555;
+  cursor:pointer;position:absolute;display:flex;align-items:flex-end;justify-content:center;
+  padding-bottom:3px;transition:.08s;user-select:none}
+.pk:hover:not(.black){background:#f5f5f5}
+.pk.black{width:18px;height:31px;background:#18182e;border-color:#2a2a2a;
+  z-index:2;border-radius:0 0 3px 3px;top:0}
+.pk.black:hover{background:#2e2e4e}
+.pk.lit{background:var(--c5) !important;box-shadow:0 0 12px var(--c5)}
+.pk.wrong{background:#e83333 !important;animation:shk .2s ease}
+.pk.correct{background:var(--c3) !important;box-shadow:0 0 12px var(--c3)}
+.pklbl{font-size:7px;color:var(--dim)}
+.pk.black .pklbl{color:#888}
+.pseq{display:flex;gap:5px;align-items:center;flex-shrink:0}
+.psn{width:22px;height:22px;border-radius:50%;border:1px solid var(--edge2);background:var(--s3);
+  display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--dim);transition:.2s}
+.psn.done{background:var(--c3);border-color:var(--c3);color:#051a10}
+.psn.next{border-color:var(--c5);color:var(--c5);animation:blink 1s ease infinite}
+.phint{font-size:10px;color:var(--muted);max-width:160px;line-height:1.55}
+
+/* =====================================================
+   Q4 — WORD ENCODE
+===================================================== */
+.word-row{display:flex;align-items:center;gap:10px;flex:1;flex-wrap:wrap}
+.wprompt{font-size:11px;color:var(--muted);white-space:nowrap}
+.wprompt em{color:var(--c5);font-style:normal}
+.winput{background:var(--s3);border:1px solid var(--edge2);border-radius:5px;
+  padding:7px 12px;color:var(--bright);font-size:13px;width:170px;outline:none;
+  transition:.2s;letter-spacing:.04em}
+.winput:focus{border-color:var(--c5);box-shadow:0 0 12px rgba(255,95,168,.18)}
+.winput::placeholder{color:var(--dim)}
+.wbtn{padding:7px 16px;border-radius:5px;border:1px solid var(--c5);
+  background:rgba(255,95,168,.1);color:var(--c5);font-size:11px;cursor:pointer;
+  transition:.15s;letter-spacing:.1em;text-transform:uppercase}
+.wbtn:hover{background:rgba(255,95,168,.22)}
+.wecho{font-size:10px;color:var(--c3);letter-spacing:.06em;opacity:0;transition:.5s}
+.wecho.show{opacity:1}
+
+/* =====================================================
+   Q5 — MASTER BUS DIAL
+===================================================== */
+.dial-wrap{display:flex;align-items:center;gap:18px;flex:1}
+.dial-canvas{flex-shrink:0;cursor:pointer;pointer-events:auto;position:static}
+.dial-info{flex:1}
+.dial-hint{font-size:10px;color:var(--muted);line-height:1.7;margin-bottom:8px}
+.dial-val{font-size:20px;color:var(--c2);font-variant-numeric:tabular-nums}
+.dial-label{font-size:8px;color:var(--dim);letter-spacing:.16em;text-transform:uppercase;margin-top:2px}
+.dial-status{font-size:10px;color:var(--dim);margin-top:6px;transition:color .3s}
+.dial-status.peak{color:var(--c3)}
+.master-go{padding:10px 22px;border-radius:6px;border:1px solid rgba(255,184,51,.4);
+  background:linear-gradient(135deg,rgba(255,184,51,.12),rgba(255,82,82,.08));
+  color:var(--c2);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  cursor:pointer;transition:.2s;animation:expg 2s ease infinite}
+
+/* =====================================================
+   TOAST & COMMENTARY
+===================================================== */
+.toast{position:fixed;top:58px;left:50%;transform:translateX(-50%) translateY(-8px);z-index:200;
+  padding:10px 22px;border-radius:28px;background:rgba(9,8,14,.92);
+  border:1px solid rgba(200,144,64,.32);color:#e0b870;font-size:11px;letter-spacing:.07em;
+  backdrop-filter:blur(20px);opacity:0;pointer-events:none;white-space:nowrap;
+  transition:opacity .28s,transform .28s;box-shadow:0 4px 28px rgba(0,0,0,.5)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.comment{position:fixed;bottom:34px;right:18px;z-index:50;max-width:300px;
+  padding:12px 14px;background:rgba(8,7,12,.9);border:1px solid var(--edge2);border-radius:8px;
+  font-size:11px;color:var(--muted);line-height:1.65;letter-spacing:.04em;
+  backdrop-filter:blur(14px);opacity:0;transform:translateY(5px);
+  transition:opacity .4s,transform .4s;pointer-events:none}
+.comment.show{opacity:1;transform:translateY(0)}
+.comment em{color:var(--c5);font-style:normal}
+
+/* =====================================================
+   FOOTER
+===================================================== */
+.foot{height:24px;background:var(--s0);border-top:1px solid var(--edge);
+  display:flex;align-items:center;padding:0 16px;gap:16px;
+  font-size:9px;color:var(--dim);letter-spacing:.08em;flex-shrink:0}
+.foot b{color:var(--c5);font-weight:400}
+
+/* =====================================================
+   REVEAL — NOTE CARD
+===================================================== */
+#close-rv{position:fixed;top:20px;right:24px;z-index:20;width:40px;height:40px;border-radius:50%;
+  border:1px solid var(--cardedge);background:rgba(8,5,3,.82);color:rgba(220,178,100,.7);
+  font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  backdrop-filter:blur(14px);opacity:0;pointer-events:none;transition:opacity .4s,transform .2s,background .2s}
+#close-rv.show{opacity:1;pointer-events:all}
+#close-rv:hover{background:rgba(255,255,255,.08);color:#fff;transform:rotate(90deg) scale(1.1)}
+
+/* Scroll fix for small screens */
+#nlayer{position:fixed;inset:0;z-index:10;display:none;align-items:flex-start;
+  justify-content:center;padding:20px;pointer-events:none;overflow:auto}
+#nlayer.show{display:flex;pointer-events:all}
+
+.ncard{max-width:640px;width:100%;background:var(--cardbg);
+  border:1px solid var(--cardedge);border-radius:13px;padding:44px 40px 34px;
+  text-align:center;backdrop-filter:blur(30px);
+  box-shadow:0 0 0 1px rgba(255,255,255,.03),0 50px 100px rgba(0,0,0,.75),inset 0 1px 0 rgba(255,255,255,.04);
+  opacity:0;transform:translateY(32px);transition:opacity 1.4s ease,transform 1.4s ease;pointer-events:none;
+  max-height: calc(100vh - 40px); overflow:auto}
+.ncard.in{opacity:1;transform:translateY(0);pointer-events:all;animation:cfloat 5s ease-in-out infinite}
+@keyframes cfloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+
+.nc-tag{font-size:9px;letter-spacing:.26em;text-transform:uppercase;color:color-mix(in srgb, var(--cardedge) 70%, rgba(255,255,255,.2));margin-bottom:14px}
+.nc-h{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:46px;color:var(--accent);line-height:1.05;margin-bottom:18px}
+.nc-rule{display:flex;align-items:center;gap:12px;max-width:170px;margin:0 auto 18px}
+.nrl{flex:1;height:1px;background:linear-gradient(90deg,transparent,color-mix(in srgb, var(--cardedge) 70%, transparent),transparent)}
+.nri{color:color-mix(in srgb, var(--cardedge) 70%, rgba(255,255,255,.2));font-size:11px}
+
+.nc-body{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:18px;
+  color:rgba(240,220,195,.85);line-height:2;text-align:left;margin-bottom:14px}
+.nc-body .hl{color:var(--accent)}
+
+.nc-word{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:13px;
+  color:color-mix(in srgb, var(--cardedge) 70%, rgba(255,255,255,.1));letter-spacing:.14em;min-height:24px;margin-bottom:14px;transition:opacity .8s;opacity:0}
+.nc-word.show{opacity:1}
+
+.tryRow{
+  margin-top:16px;
+  display:flex;
+  gap:10px;
+  justify-content:center;
+  flex-wrap:wrap;
+}
+.tryBtn{
+  padding:10px 16px;border-radius:10px;
+  border:1px solid var(--cardedge);
+  background:rgba(255,255,255,.05);
+  color:rgba(240,220,195,.85);
+  cursor:pointer;transition:.18s;
+  font-size:11px;letter-spacing:.08em;
+}
+.tryBtn:hover{background:rgba(255,255,255,.09);transform:translateY(-1px)}
+
+.embedWrap{
+  margin-top:14px;
+  border-radius:12px;
+  overflow:hidden;
+  border:1px solid var(--cardedge);
+  background:rgba(255,255,255,.02);
+}
+.embedPre{
+  font-size:9px;letter-spacing:.22em;text-transform:uppercase;
+  color:color-mix(in srgb, var(--cardedge) 70%, rgba(255,255,255,.1));
+  margin:10px 0 8px;text-align:left
+}
+
+/* Valentine prompt */
+.vq{
+  margin-top:16px;
+  padding:14px 14px 12px;
+  border-radius:12px;
+  border:1px solid var(--cardedge);
+  background:rgba(255,255,255,.04);
+  text-align:center;
+}
+.vq h3{
+  font-family:'Cormorant Garamond',serif;
+  font-style:italic;
+  font-size:26px;
+  color:var(--accent);
+  margin-bottom:10px;
+}
+.vbtns{display:flex;gap:10px;justify-content:center;align-items:center;position:relative;min-height:48px}
+.vbtn{
+  padding:10px 16px;border-radius:10px;
+  border:1px solid var(--cardedge);
+  background:rgba(0,0,0,.25);
+  color:rgba(240,220,195,.92);
+  cursor:pointer;
+  transition:.16s;
+  font-size:12px;
+  letter-spacing:.06em;
+}
+.vbtn:hover{transform:translateY(-1px);background:rgba(255,255,255,.06)}
+.vbtn.yes{border-color:color-mix(in srgb, var(--cardedge) 75%, rgba(255,255,255,.1));}
+.vbtn.no{opacity:.95}
+.vresp{
+  margin-top:10px;
+  font-size:14px;
+  color:rgba(240,220,195,.85);
+  font-family:'Cormorant Garamond',serif;
+  font-style:italic;
+  opacity:0;
+  transition:.5s;
+}
+.vresp.show{opacity:1}
+
+/* hearts animation */
+@keyframes hpop{
+  0%{transform:translateY(0) scale(.9);opacity:0}
+  12%{opacity:1}
+  100%{transform:translateY(-120px) scale(1.25);opacity:0}
+}
+</style>
+</head>
+
+<body>
+
+<!-- ══════════════ MOOD GATE (FIRST) ══════════════ -->
+<div id="moodGate">
+  <div class="mgcard">
+    <div class="mghead">
+      <div>
+        <div class="mgpre">Valentine.als — Mood Select</div>
+        <div class="mgh">
+          Hey producer. Choose what you feel like.<br>
+          Then build the session. Then we bloom. 🌸🎛️
+        </div>
+        <div class="mgsub">
+          Each mood is a different “version” of you us: different memory note + different song embed.
+          (Audio won’t autoplay — you’ll have to press play in the embed. That’s normal.)
+        </div>
+        <div class="mgstartHint">Pick a mood to begin ↓</div>
+      </div>
+      <div class="mgmeta">Pick 1 of 3</div>
+    </div>
+
+    <div class="mggrid">
+      <button class="moodBtn" id="mood_thomso" onclick="pickMood('thomso')"></button>
+      <button class="moodBtn" id="mood_perfect" onclick="pickMood('perfect')"></button>
+      <button class="moodBtn" id="mood_mixtape" onclick="pickMood('mixtape')"></button>
+    </div>
+
+    <div class="mgfoot">
+      Tip: open via <b>Live Server</b> or any hosted link so embeds behave nicely.
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ DAW SCREEN ══════════════ -->
+<div id="daw">
+  <div class="tbar">
+    <div class="dots">
+      <div class="dot dot-r" title="Back to moods" onclick="backToMoods()"></div>
+      <div class="dot dot-y"></div>
+      <div class="dot dot-g"></div>
+    </div>
+    <div class="tbar-mid">Valentine.als &nbsp;—&nbsp; <strong id="sess-name">Untitled Session</strong> &nbsp;●&nbsp; ★ Quest Mode</div>
+    <div class="tbar-clk" id="clk">00:00:00</div>
+  </div>
+
+  <div class="tr">
+    <button class="tbtn" onclick="rewind()">⏮</button>
+    <button class="tbtn" id="btnplay" onclick="togglePlay()">▶</button>
+    <button class="tbtn" id="btnstop" onclick="stopPlay()">■</button>
+    <div class="tsep"></div>
+    <div class="bpm-g">
+      <span class="bpm-tag">BPM</span>
+      <div class="bpm-a">
+        <button class="bab" onclick="bpmD(1)">▲</button>
+        <button class="bab" onclick="bpmD(-1)">▼</button>
+      </div>
+      <span class="bpm-v" id="bpmv">90</span>
+    </div>
+    <div class="tsep"></div>
+    <span style="font-size:9px;color:var(--dim);letter-spacing:.14em;text-transform:uppercase;flex-shrink:0">QUEST</span>
+    <div class="qpills" id="qpills"></div>
+    <div class="tsep"></div>
+    <div class="vu-g">
+      <div class="vu-b" id="vu0" style="height:2px"></div>
+      <div class="vu-b" id="vu1" style="height:2px"></div>
+      <div class="vu-b" id="vu2" style="height:2px"></div>
+      <div class="vu-b" id="vu3" style="height:2px"></div>
+      <div class="vu-b" id="vu4" style="height:2px"></div>
+    </div>
+    <button class="exp" id="expbtn" onclick="doExport()">❧ &nbsp;Master &amp; Export</button>
+  </div>
+
+  <div class="dbody">
+    <div class="sb">
+      <div class="sbi on">⊞</div>
+      <div class="sbi">≡</div>
+      <div class="sbi">◧</div>
+      <div class="sbi">⬡</div>
+    </div>
+    <div class="ta">
+      <div class="ruler">
+        <div class="rl">Tracks — Quest Mode</div>
+        <div class="rb">
+          <div class="rm b1">1</div><div class="rm">2</div><div class="rm">3</div><div class="rm">4</div>
+          <div class="rm b1">5</div><div class="rm">6</div><div class="rm">7</div><div class="rm">8</div>
+        </div>
+      </div>
+      <div class="trks" id="trks"></div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>Complete each producer quest to build the session</span>
+    <span>•</span>
+    <span>Unlock all 5 to <b>Master &amp; Export</b> 🌹</span>
+  </div>
+</div>
+
+<!-- ══════════════ REVEAL SCREEN ══════════════ -->
+<div id="rv"></div>
+<canvas id="cb"></canvas>
+<canvas id="cp"></canvas>
+<button id="close-rv" onclick="closeReveal()">×</button>
+
+<div id="nlayer">
+  <div class="ncard" id="ncard">
+    <div class="nc-tag" id="nctag">Mood Session · Producer: Vivasvan · Take Complete</div>
+    <div class="nc-h" id="nch">For you,<br>my favorite soul.</div>
+    <div class="nc-rule"><div class="nrl"></div><span class="nri">✦</span><div class="nrl"></div></div>
+
+    <div class="nc-body" id="memoryBody"></div>
+    <div class="nc-word" id="ncword"></div>
+
+    <div class="embedPre">Play the memory</div>
+    <div class="embedWrap" id="memoryEmbed"></div>
+
+    <!-- Valentine question -->
+    <div class="vq" id="vq">
+      <h3>Will you be my valentine?</h3>
+      <div class="vbtns" id="vbtns">
+        <button class="vbtn yes" id="vyes" onclick="sayYes()">Yes</button>
+        <button class="vbtn no" id="vno">No</button>
+      </div>
+      <div class="vresp" id="vresp">♡</div>
+    </div>
+
+    <div class="tryRow">
+      <button class="tryBtn" onclick="tryAnother()">Try another mood session ✨</button>
+      <button class="tryBtn" onclick="closeReveal()">Back to DAW</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="comment" id="comment"></div>
+
+<script>
+'use strict';
+
+/* =====================================================
+   MOODS (3 versions) + THEMES (for reveal)
+===================================================== */
+let SELECTED_MOOD = null;
+let THEME = null;
+
+const MOODS = {
+  thomso: {
+    gateHTML: `
+      <div class="tag">Butterflies</div>
+      <div class="t">She Will Be Loved — second place, first place in closeness</div>
+      <div class="s">Before dating. Already in love. Singing together and getting close without saying it out loud.</div>
+    `,
+    sessionName: "Thomso Take ♡",
+    bpm: 84,
+    header: "For you,<br>my favorite almost-before.",
+    tag: "Thomso · She Will Be Loved · the beginning",
+    memoryHTML: `
+      Thomso feels like a secret chapter we both knew by heart.<br><br>
+      We weren’t “together” yet — but we were <span class="hl">already us</span>.<br>
+      Singing <span class="hl">She Will Be Loved</span>, winning second place… and somehow getting first place in closeness.<br><br>
+      This is the take where everything started to sound like home.
+    `,
+    embedHTML: `
+      <div style="position:relative;padding-top:56.25%;">
+        <iframe
+          src="https://www.youtube.com/embed/nIjVuRTm-dc"
+          title="She Will Be Loved"
+          style="position:absolute;inset:0;width:100%;height:100%;border:0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowfullscreen></iframe>
+      </div>
+    `,
+    questFlavor: {
+      q1: 'tap the beat like it’s a stage and we’re pretending this is “just practice” 👀',
+      q2: 'find the bass sweet spot—like that “we’re close but not saying it” tension',
+      q3: 'play it clean. like a rehearsal that’s secretly a confession',
+      q4: 'encode one word you wish you could’ve said then',
+      q5: 'turn it up. commit. bounce the take.'
+    },
+    theme: {
+      rvBg: '#1a0f1f',  // deep plum background (romantic night vibe)
+
+      cardBg: 'rgba(28,12,32,.92)', // dark berry glass card
+      cardEdge: 'rgba(255,120,180,.35)', // glowing pink edge
+
+      accent: '#ff7ab6', // main pink accent
+
+      bloomWarm: [
+            [255,120,180],  // bright pink
+            [255,160,210],  // soft bubblegum
+            [255,95,150],   // hot pink
+            [255,180,120],  // peach sunset
+            [255,140,90],   // coral glow
+            [255,200,150]   // warm blush
+            ],
+
+      bloomGreen: [
+        [120,200,160],  // minty
+        [90,170,140],   // teal-green
+        [140,220,170]   // soft spring green
+       ],
+
+      particles: [
+        [255,180,220],  // pink shimmer
+        [255,210,170],  // golden sparkle
+        [255,150,200],  // magenta dust
+        [255,230,190],  // soft gold
+        [255,120,180]   // neon flutter
+       ]
+    }
+  },
+
+  perfect: {
+    gateHTML: `
+      <div class="tag">Romantic</div>
+      <div class="t">Perfect — sunset hills & the look that changed everything</div>
+      <div class="s">Rehearsing, you looked at me, and the universe went quiet for a second.</div>
+    `,
+    sessionName: "Perfect at Sunset ✨",
+    bpm: 96,
+    header: "For you,<br>my once-in-a-lifetime.",
+    tag: "Romantic · Perfect · sunset hills",
+    memoryHTML: `
+      This one is <span class="hl">our song</span> for a reason.<br><br>
+      We were rehearsing and I saw you looking at me — not casually. Not politely.<br>
+      Like you already knew.<br><br>
+      Sunset on the hills, that golden light, and suddenly everything felt… <span class="hl">perfect</span>.
+    `,
+    embedHTML: `
+      <div style="position:relative;padding-top:56.25%;">
+        <iframe
+          src="https://www.youtube.com/embed/2Vv-BfVoq4g"
+          title="Perfect - Ed Sheeran"
+          style="position:absolute;inset:0;width:100%;height:100%;border:0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowfullscreen></iframe>
+      </div>
+    `,
+    questFlavor: {
+      q1: 'tap the heartbeat. pretend you’re not thinking about that sunset 🌅',
+      q2: 'slide into the sweet spot—like your eyes landing on me mid-rehearsal',
+      q3: 'hit the notes like you mean “I choose you.”',
+      q4: 'encode the word that describes the way it felt',
+      q5: '0 dBFS. no fear. bounce it.'
+    },
+    theme: {
+      rvBg: '#0b0805',
+      cardBg: 'rgba(10,7,4,.93)',
+      cardEdge: 'rgba(200,144,64,.20)',
+      accent: '#e8b870',
+      bloomWarm: [
+        [212,94,72],[244,188,162],[206,144,68],[222,112,82],[240,164,118],[190,74,54],[255,210,152]
+      ],
+      bloomGreen: [
+        [90,140,72],[112,160,88],[78,122,62]
+      ],
+      particles: [
+        [255,200,140],[255,170,128],[205,152,100],[255,222,175]
+      ]
+    }
+  },
+
+  mixtape: {
+    gateHTML: `
+      <div class="tag">Cozy</div>
+      <div class="t">The mixtape you made — warm, happy, ridiculously us</div>
+      <div class="s">A month in. The playlist had everything. Also: John Mayer CDs reveal 😂</div>
+    `,
+    sessionName: "Mixtape Warmth ☕️",
+    bpm: 90,
+    header: "For you,<br>my comfort person.",
+    tag: "Cozy · Mixtape · John Mayer moment",
+    memoryHTML: `
+      A month in, and you made me that mixtape — and somehow it had <span class="hl">everything</span>.<br>
+      It made me feel warm and safe and giddy all at once.<br><br>
+      Also: you were annoyed about gifts… until I said “John Mayer CDs.”<br>
+      And you LOST it like: <span class="hl">“WHY DIDN’T YOU TELL ME?!”</span> 😭<br><br>
+      This is the take that sounds like laughing in the same room.
+    `,
+    embedHTML: `
+      <iframe style="border:0;width:100%;height:352px"
+        src="https://open.spotify.com/embed/playlist/3gwOL6TDo8Ia4vuFLmxsdi?utm_source=generator"
+        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+        loading="lazy"></iframe>
+    `,
+    questFlavor: {
+      q1: 'tap like you’re unpacking a gift you said you didn’t want 😌',
+      q2: 'find the warm zone—cozy bass, cozy heart',
+      q3: 'play it like a playlist that gets you',
+      q4: 'encode the word “warm” but cooler (you got this)',
+      q5: 'bounce it, and then demand your John Mayer CDs immediately.'
+    },
+    theme: {
+      rvBg: '#07100c',
+      cardBg: 'rgba(7,14,10,.92)',
+      cardEdge: 'rgba(46,212,160,.18)',
+      accent: '#79f2c7',
+      bloomWarm: [
+        [110,255,200],[80,220,170],[170,255,225],[60,180,140],[140,240,200],[210,255,240]
+      ],
+      bloomGreen: [
+        [60,140,90],[80,160,110],[50,120,80]
+      ],
+      particles: [
+        [130,255,210],[90,220,180],[170,255,230],[60,180,140]
+      ]
+    }
+  }
+};
+
+function applyMoodTheme(){
+  const m = MOODS[SELECTED_MOOD] || MOODS.perfect;
+  THEME = m.theme || MOODS.perfect.theme;
+
+  const root = document.documentElement;
+  root.style.setProperty('--rvbg', THEME.rvBg);
+  root.style.setProperty('--cardbg', THEME.cardBg);
+  root.style.setProperty('--cardedge', THEME.cardEdge);
+  root.style.setProperty('--accent', THEME.accent);
+
+  const rv = document.getElementById('rv');
+  if(rv) rv.style.background = THEME.rvBg;
+}
+
+/* =====================================================
+   AUDIO ENGINE (same as before)
+===================================================== */
+let AC=null,MG,RW,RD;
+function ac(){
+  if(!AC){
+    AC=new(window.AudioContext||window.webkitAudioContext)();
+    MG=AC.createGain();MG.gain.value=.85;
+    const rv=mkRev(2.6);
+    RD=AC.createGain();RD.gain.value=.7;
+    RW=AC.createGain();RW.gain.value=.3;
+    MG.connect(RD);RD.connect(AC.destination);
+    MG.connect(rv);rv.connect(RW);RW.connect(AC.destination);
+  }
+  return AC;
+}
+function mkRev(d){
+  const a=ac(),len=Math.ceil(a.sampleRate*d),b=a.createBuffer(2,len,a.sampleRate);
+  for(let c=0;c<2;c++){
+    const ch=b.getChannelData(c);
+    for(let i=0;i<len;i++) ch[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.4);
+  }
+  const n=a.createConvolver();n.buffer=b;return n;
+}
+function send(node,vol=1){const g=ac().createGain();g.gain.value=vol;node.connect(g);g.connect(MG);}
+
+function sKick(t=0){
+  const a=ac(),o=a.createOscillator(),g=a.createGain();
+  o.connect(g);send(g);
+  o.frequency.setValueAtTime(165,t);o.frequency.exponentialRampToValueAtTime(40,t+.15);
+  g.gain.setValueAtTime(1.2,t);g.gain.exponentialRampToValueAtTime(.001,t+.36);
+  o.start(t);o.stop(t+.4);
+
+  const a2=ac(),buf=a2.createBuffer(1,512,a2.sampleRate),d=buf.getChannelData(0);
+  for(let i=0;i<512;i++) d[i]=(Math.random()*2-1)*Math.exp(-i/10);
+  const s=a2.createBufferSource(),cg=a2.createGain();s.buffer=buf;cg.gain.value=.32;
+  s.connect(cg);cg.connect(MG);s.start(t);
+}
+function sSnare(t=0){
+  const a=ac(),len=Math.ceil(a.sampleRate*.22),buf=a.createBuffer(1,len,a.sampleRate),d=buf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.exp(-i/(len*.14));
+  const s=a.createBufferSource(),f=a.createBiquadFilter(),g=a.createGain();
+  f.type='bandpass';f.frequency.value=1600;f.Q.value=.55;s.buffer=buf;
+  s.connect(f);f.connect(g);send(g,.8);s.start(t);
+  const o=a.createOscillator(),og=a.createGain();
+  o.frequency.value=215;o.connect(og);send(og,.38);
+  og.gain.setValueAtTime(.5,t);og.gain.exponentialRampToValueAtTime(.001,t+.07);
+  o.start(t);o.stop(t+.08);
+}
+function sHat(t=0){
+  const a=ac(),len=Math.ceil(a.sampleRate*.05),buf=a.createBuffer(1,len,a.sampleRate),d=buf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.exp(-i/(len*.22));
+  const s=a.createBufferSource(),f=a.createBiquadFilter(),g=a.createGain();
+  f.type='highpass';f.frequency.value=8500;g.gain.value=.4;s.buffer=buf;
+  s.connect(f);f.connect(g);send(g);s.start(t);
+}
+function sBass(t=0,n=0){
+  const freqs=[55,73.4,82.4,98,65.4],fr=freqs[n%freqs.length];
+  const a=ac(),o=a.createOscillator(),g=a.createGain(),flt=a.createBiquadFilter();
+  flt.type='lowpass';flt.frequency.value=400;flt.Q.value=3;
+  o.type='sawtooth';o.frequency.value=fr;o.connect(flt);flt.connect(g);send(g,.85);
+  g.gain.setValueAtTime(.9,t);g.gain.exponentialRampToValueAtTime(.001,t+.44);
+  o.start(t);o.stop(t+.5);
+}
+function sNote(freq,t=0,type='triangle'){
+  const a=ac(),o=a.createOscillator(),g=a.createGain(),f=a.createBiquadFilter();
+  o.type=type;o.frequency.value=freq;f.type='lowpass';f.frequency.value=2200;
+  o.connect(f);f.connect(g);send(g,.34);
+  g.gain.setValueAtTime(.44,t);g.gain.exponentialRampToValueAtTime(.001,t+.27);
+  o.start(t);o.stop(t+.31);
+}
+function sChime(f,t=0){
+  const a=ac(),o=a.createOscillator(),g=a.createGain();
+  o.type='sine';o.frequency.value=f;o.connect(g);send(g,.26);
+  g.gain.setValueAtTime(.38,t);g.gain.exponentialRampToValueAtTime(.001,t+1.1);
+  o.start(t);o.stop(t+1.2);
+}
+function fanfare(){const a=ac();[523,659,784,1047].forEach((f,i)=>sChime(f,a.currentTime+i*.12));}
+
+/* =====================================================
+   SEQUENCER
+===================================================== */
+let BPM=90,playing=false,step=-1,nxt=0,seqT=null;
+const GR=[
+  [1,0,0,0,1,0,0,0],
+  [0,0,1,0,0,0,1,0],
+  [1,1,1,1,1,1,1,1],
+  [1,0,0,1,0,1,0,0],
+  [1,0,1,0,0,1,0,1],
+];
+const PN=[261.6,293.7,329.6,392,440,523.3,659.3,440];
+
+function togglePlay(){
+  ac();
+  if(playing){
+    playing=false;clearTimeout(seqT);
+    document.getElementById('btnplay').classList.remove('lit');
+    document.getElementById('btnplay').textContent='▶';
+  } else{
+    playing=true;nxt=ac().currentTime+.05;seq();
+    document.getElementById('btnplay').classList.add('lit');
+    document.getElementById('btnplay').textContent='⏸';
+  }
+}
+function stopPlay(){playing=false;clearTimeout(seqT);step=-1;document.getElementById('btnplay').classList.remove('lit');document.getElementById('btnplay').textContent='▶';}
+function rewind(){step=-1;}
+function bpmD(d){BPM=Math.max(60,Math.min(200,BPM+d));document.getElementById('bpmv').textContent=BPM;}
+
+function seq(){
+  if(!playing)return;
+  const sd=60/BPM/2;
+  while(nxt<ac().currentTime+.1){
+    step=(step+1)%8;const t=nxt;
+    if(Q.d1&&GR[0][step])sKick(t);
+    if(Q.d2&&GR[1][step])sSnare(t);
+    if(Q.d3&&GR[2][step])sHat(t);
+    if(Q.d4&&GR[3][step])sBass(t,step);
+    if(Q.d5&&GR[4][step])sNote(PN[step],t);
+    nxt+=sd;
+  }
+  seqT=setTimeout(seq,22);
+}
+function animVU(){
+  for(let i=0;i<5;i++){
+    const e=document.getElementById('vu'+i);
+    if(e) e.style.height=(playing?4+Math.random()*20:1+Math.random()*3)+'px';
+  }
+  setTimeout(animVU,85);
+}
+
+/* =====================================================
+   QUEST STATE
+===================================================== */
+const Q={d1:false,d2:false,d3:false,d4:false,d5:false,word:'',active:1};
+
+function updPills(){
+  document.querySelectorAll('.qpill').forEach((p,i)=>{
+    const n=i+1,done=Q[`d${n}`],now=!done&&Q.active===n;
+    p.classList.toggle('done',done);p.classList.toggle('now',now);
+  });
+  if(Q.d1&&Q.d2&&Q.d3&&Q.d4&&Q.d5) document.getElementById('expbtn').classList.add('go');
+}
+
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),2800);
+}
+function comment(html){
+  const el=document.getElementById('comment');
+  el.innerHTML=html;el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),4200);
+}
+
+/* =====================================================
+   TRACKS (base) + dynamic flavor per mood
+===================================================== */
+function getTrackDefs(){
+  const m = MOODS[SELECTED_MOOD] || MOODS.perfect;
+  return [
+    {label:'Drums',   sub:m.questFlavor.q1, color:'var(--c1)',hex:'#ff5252',clip:'Boom Trap Kit',   secret:'heartbeat installed.', build:buildQ1},
+    {label:'Bass',    sub:m.questFlavor.q2, color:'var(--c4)',hex:'#9966ff',clip:'Sub Sine 808',    secret:'low end = emotional stability.', build:buildQ2},
+    {label:'Melody',  sub:m.questFlavor.q3, color:'var(--c5)',hex:'#ff5fa8',clip:'Pentatonic Lead', secret:'four notes, one feeling.', build:buildQ3},
+    {label:'Texture', sub:m.questFlavor.q4, color:'var(--c3)',hex:'#2ed4a0',clip:'Warm Reverb Pad', secret:'a word stitched into the air.', build:buildQ4},
+    {label:'Master',  sub:m.questFlavor.q5, color:'var(--c2)',hex:'#ffb833',clip:'Valentine Master',secret:'bounce it. claim it.', build:buildQ5},
+  ];
+}
+let TDEFS=[];
+
+/* =====================================================
+   BUILD / RESET
+===================================================== */
+function buildQuestPills(){
+  const pp=document.getElementById('qpills');
+  pp.innerHTML='';
+  for(let i=0;i<5;i++){
+    const p=document.createElement('div');
+    p.className='qpill'+(i===0?' now':'');
+    pp.appendChild(p);
+  }
+}
+
+function buildTracks(){
+  const root=document.getElementById('trks');
+  root.innerHTML='';
+  TDEFS=getTrackDefs();
+
+  TDEFS.forEach((t,i)=>{
+    const row=document.createElement('div');
+    row.className='trk '+(i===0?'active':'locked');
+    row.id='trk'+i;
+    row.style.animationDelay=i*.06+'s';
+    row.innerHTML=`
+      <div class="tlbl">
+        <div class="tacc" style="background:${t.color}"></div>
+        <div class="tmeta">
+          <div class="tname">${t.label}</div>
+          <div class="tsub">${t.sub}</div>
+          <div class="teq" id="teq${i}">
+            <div class="eqb" style="background:${t.color}"></div>
+            <div class="eqb" style="background:${t.color}"></div>
+            <div class="eqb" style="background:${t.color}"></div>
+          </div>
+        </div>
+      </div>
+      <div class="qzone" id="qz${i}">
+        ${i>0?'<div class="lockover"><span>🔒</span><span>complete previous quest to unlock</span></div>':''}
+        <div id="qi${i}" style="display:flex;align-items:center;gap:12px;flex:1;flex-wrap:wrap"></div>
+      </div>`;
+    root.appendChild(row);
+    if(i===0) setTimeout(()=>t.build(document.getElementById('qi0')),200);
+  });
+}
+
+function unlockTrack(i){
+  if(i>=TDEFS.length)return;
+  const row=document.getElementById('trk'+i),zone=document.getElementById('qz'+i);
+  if(!row||!zone)return;
+  row.classList.remove('locked');row.classList.add('active');
+  const lo=zone.querySelector('.lockover');if(lo)lo.remove();
+  zone.style.transition='background .5s';zone.style.background='rgba(200,144,64,.06)';
+  setTimeout(()=>zone.style.background='',700);
+  TDEFS[i].build(document.getElementById('qi'+i));
+  setTimeout(()=>row.scrollIntoView({behavior:'smooth',block:'nearest'}),200);
+}
+
+function doneTrack(i){
+  const row=document.getElementById('trk'+i),qi=document.getElementById('qi'+i);
+  if(!row||!qi)return;
+  row.classList.remove('active');row.classList.add('done');
+  document.getElementById('teq'+i)?.classList.add('on');
+  const t=TDEFS[i];
+  const w1=Math.round(150+Math.random()*90),w2=Math.round(70+Math.random()*50);
+  qi.innerHTML=`
+    <div class="done-wrap">
+      <div class="dclip" style="background:${t.hex};width:${w1}px"><span class="dcname">${t.clip}</span></div>
+      <div class="dclip" style="background:${t.hex};width:${w2}px;opacity:.45"><span class="dcname"></span></div>
+      <div class="dsecret">❝ ${t.secret} ❞</div>
+    </div>`;
+}
+
+/* =====================================================
+   Q1 — RHYTHM TAP
+===================================================== */
+let metOn=false,metTimer=null,metBeat=0,tapIdx=0,tapOK=0,tapActive=false;
+
+function buildQ1(zone){
+  zone.innerHTML=`
+    <div class="qchip" style="border-color:var(--c1);color:var(--c1)">RHYTHM TAP</div>
+    <div class="metro-dot" id="mdot"></div>
+    <div class="tap-row" id="taprow">
+      ${[...Array(8)].map((_,i)=>`<div class="tap-cell" id="tc${i}">·</div>`).join('')}
+    </div>
+    <div class="tap-hint" id="taphint">wait for the beat, then tap <b style="color:var(--c2)">SPACEBAR</b> × 8 in rhythm</div>`;
+  startMet();
+  setTimeout(()=>{tapActive=true;},1500);
+  document.addEventListener('keydown',onTap);
+  document.addEventListener('touchstart',onTapTouch,{passive:true});
+}
+
+function startMet(){
+  if(metOn)return;metOn=true;metBeat=0;
+  function tick(){
+    if(!metOn)return;
+    const t=ac().currentTime;
+    if(metBeat%2===0)sKick(t);else sHat(t);
+    const d=document.getElementById('mdot');
+    if(d){d.classList.add('beat');setTimeout(()=>d.classList.remove('beat'),80);}
+    metBeat++;metTimer=setTimeout(tick,60000/BPM/2);
+  }
+  tick();
+}
+function stopMet(){metOn=false;clearTimeout(metTimer);}
+
+function onTap(e){if(e.code==='Space'||e.code==='Enter'){e.preventDefault();doTap();}}
+function onTapTouch(){doTap();}
+
+function doTap(){
+  if(!tapActive||Q.d1)return;
+  const t=ac().currentTime;
+  const beatMs=60000/BPM/2;
+  const phase=((t*1000)%(beatMs*2))/beatMs;
+  const onBeat=phase<0.38||phase>1.62;
+  const cell=document.getElementById('tc'+tapIdx);
+  if(cell){
+    cell.classList.add(onBeat?'hit':'miss');
+    cell.textContent=onBeat?'♥':'✗';
+    if(onBeat){tapOK++;sHat(t+.01);}
+  }
+  tapIdx++;
+  if(tapIdx>=8){
+    document.removeEventListener('keydown',onTap);
+    document.removeEventListener('touchstart',onTapTouch);
+    stopMet();tapActive=false;
+    const hint=document.getElementById('taphint');
+    if(hint)hint.textContent=tapOK>=5?'🔥 groovy. drums unlocked.':'not bad for a first take. drums unlocked.';
+    setTimeout(finQ1,600);
+  }
+}
+
+function finQ1(){
+  Q.d1=true;Q.active=2;
+  fanfare();
+  toast('🥁 Track 1 built — Drums added');
+  comment(`ok <em>Vivasvan</em>… rhythm confirmed. suspiciously main-character. 👀`);
+  doneTrack(0);unlockTrack(1);updPills();
+}
+
+/* =====================================================
+   Q2 — FADER SWEET SPOT
+===================================================== */
+let fdrag=false,fval=0;
+const FMIN=.52,FMAX=.72;
+
+function buildQ2(zone){
+  zone.innerHTML=`
+    <div class="qchip" style="border-color:var(--c4);color:var(--c4)">BASS FEEL</div>
+    <div class="fader-row">
+      <div style="font-size:10px;color:var(--muted);white-space:nowrap;max-width:140px;line-height:1.6">
+        drag the fader until it hits the <b style="color:var(--c3)">sweet spot</b> 🎚
+      </div>
+      <div class="fader-track" id="ft">
+        <div class="fader-fill" id="ff"></div>
+        <div class="sweet-zone" id="sz" style="left:${FMIN*100}%;width:${(FMAX-FMIN)*100}%"></div>
+        <div class="fader-knob" id="fk" style="left:0%"></div>
+      </div>
+      <div class="feel-v" id="feelv">— — —</div>
+    </div>`;
+  initFader();
+}
+
+function initFader(){
+  const ft=document.getElementById('ft'),fk=document.getElementById('fk');
+  if(!ft||!fk)return;
+  function setF(x){
+    const r=ft.getBoundingClientRect();
+    fval=Math.max(0,Math.min(1,(x-r.left)/r.width));
+    document.getElementById('ff').style.width=fval*100+'%';
+    fk.style.left=fval*100+'%';
+    const fv=document.getElementById('feelv');
+    if(fval<.2){fv.textContent='too cold ❄️';fv.classList.remove('hot');}
+    else if(fval<FMIN){fv.textContent='warmer… 🔆';fv.classList.remove('hot');}
+    else if(fval<=FMAX){fv.textContent='🔥 THAT\'S IT';fv.classList.add('hot');checkQ2();}
+    else{fv.textContent='too hot!! 🌶️';fv.classList.remove('hot');}
+    sBass(ac().currentTime,Math.floor(fval*4));
+  }
+  fk.addEventListener('mousedown',e=>{fdrag=true;e.preventDefault();});
+  document.addEventListener('mousemove',e=>{if(fdrag)setF(e.clientX);});
+  document.addEventListener('mouseup',()=>fdrag=false);
+  ft.addEventListener('click',e=>setF(e.clientX));
+  fk.addEventListener('touchstart',e=>{fdrag=true;e.preventDefault();},{passive:false});
+  document.addEventListener('touchmove',e=>{if(fdrag)setF(e.touches[0].clientX);},{passive:true});
+  document.addEventListener('touchend',()=>fdrag=false);
+}
+
+let q2check=false;
+function checkQ2(){
+  if(q2check||Q.d2)return;q2check=true;
+  setTimeout(()=>{
+    Q.d2=true;Q.active=3;
+    fanfare();
+    toast('🎸 Track 2 built — Bass locked in');
+    comment('the low end is in. <em>so is your emotional damage.</em> (kidding. mostly.)');
+    doneTrack(1);unlockTrack(2);updPills();
+  },600);
+}
+
+/* =====================================================
+   Q3 — MINI PIANO SEQUENCE
+===================================================== */
+const PNOTES=[
+  {n:'C4',f:261.6,x:0,  black:false},
+  {n:'D4',f:293.7,x:30, black:false},
+  {n:'E4',f:329.6,x:60, black:false},
+  {n:'F4',f:349.2,x:90, black:false},
+  {n:'G4',f:392.0,x:120,black:false},
+  {n:'A4',f:440.0,x:150,black:false},
+  {n:'B4',f:493.9,x:180,black:false},
+  {n:'C5',f:523.3,x:210,black:false},
+  {n:'C#',f:277.2,x:21, black:true},
+  {n:'D#',f:311.1,x:51, black:true},
+  {n:'F#',f:370.0,x:111,black:true},
+  {n:'G#',f:415.3,x:141,black:true},
+  {n:'A#',f:466.2,x:171,black:true},
+];
+const SECRET=[0,2,4,7];
+let prog=0;
+
+function buildQ3(zone){
+  zone.innerHTML=`
+    <div class="qchip" style="border-color:var(--c5);color:var(--c5)">MELODY</div>
+    <div class="piano-wrap">
+      <div><div class="piano" id="piano" style="width:240px"></div></div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="pseq" id="pseq">
+          ${SECRET.map((_,i)=>`<div class="psn ${i===0?'next':''}" id="psn${i}">${i+1}</div>`).join('')}
+          <span style="font-size:9px;color:var(--dim);margin-left:4px">← in order</span>
+        </div>
+        <div class="phint" id="phint">Play the <em style="color:var(--c5)">glowing keys</em> in sequence:<br>C → E → G → C ♪</div>
+      </div>
+    </div>`;
+  buildPiano();
+  litKey();
+}
+
+function buildPiano(){
+  const el=document.getElementById('piano');if(!el)return;
+  el.style.position='relative';el.style.height='54px';
+  PNOTES.forEach((n,i)=>{
+    const k=document.createElement('div');
+    k.className='pk'+(n.black?' black':'');
+    k.id='pk'+i;
+    k.style.left=n.x+'px';
+    k.style.position='absolute';
+    if(!n.black)k.innerHTML=`<span class="pklbl">${n.n}</span>`;
+    k.addEventListener('mousedown',()=>tapKey(i));
+    k.addEventListener('touchstart',e=>{e.preventDefault();tapKey(i);},{passive:false});
+    el.appendChild(k);
+  });
+}
+
+function litKey(){
+  PNOTES.forEach((_,i)=>document.getElementById('pk'+i)?.classList.remove('lit'));
+  if(prog<SECRET.length){
+    const pk=document.getElementById('pk'+SECRET[prog]);
+    if(pk)pk.classList.add('lit');
+  }
+}
+
+function tapKey(i){
+  sNote(PNOTES[i].f,ac().currentTime+.01);
+  const pk=document.getElementById('pk'+i);
+  if(Q.d3)return;
+  if(prog<SECRET.length){
+    if(i===SECRET[prog]){
+      pk?.classList.remove('lit');pk?.classList.add('correct');
+      setTimeout(()=>pk?.classList.remove('correct'),350);
+      const sn=document.getElementById('psn'+prog);
+      if(sn){sn.classList.remove('next');sn.classList.add('done');}
+      prog++;
+      if(prog<SECRET.length){
+        document.getElementById('psn'+prog)?.classList.add('next');
+        litKey();
+      } else {
+        const ph=document.getElementById('phint');
+        if(ph)ph.innerHTML='🎵 <em style="color:var(--c3)">Perfect sequence! Melody unlocked!</em>';
+        setTimeout(finQ3,500);
+      }
+    } else {
+      pk?.classList.add('wrong');
+      setTimeout(()=>pk?.classList.remove('wrong'),300);
+      prog=0;
+      document.querySelectorAll('.psn').forEach((s,si)=>{s.classList.remove('done','next');if(si===0)s.classList.add('next');});
+      litKey();
+    }
+  }
+}
+
+function finQ3(){
+  Q.d3=true;Q.active=4;
+  fanfare();
+  toast('🎹 Track 3 built — Melody in the session');
+  comment('wait… you can actually play? <em>illegal.</em>');
+  doneTrack(2);unlockTrack(3);updPills();
+}
+
+/* =====================================================
+   Q4 — WORD ENCODE
+===================================================== */
+function buildQ4(zone){
+  zone.innerHTML=`
+    <div class="qchip" style="border-color:var(--c3);color:var(--c3)">ENCODE</div>
+    <div class="word-row">
+      <div class="wprompt">one word that describes how you <em>feel</em> right now →</div>
+      <input class="winput" id="winp" maxlength="22" placeholder="e.g. warm, lucky…"
+        onkeydown="if(event.key==='Enter')submitWord()">
+      <button class="wbtn" onclick="submitWord()">Encode ↵</button>
+    </div>
+    <div class="wecho" id="wecho"></div>`;
+  setTimeout(()=>document.getElementById('winp')?.focus(),120);
+}
+
+function submitWord(){
+  const inp=document.getElementById('winp');
+  if(!inp||!inp.value.trim())return;
+  Q.word=inp.value.trim().toLowerCase();
+  const echo=document.getElementById('wecho');
+  if(echo){echo.textContent=`"${Q.word}" is now woven into the mix. 🧵`;echo.classList.add('show');}
+  [261.6,329.6,392].forEach((f,i)=>sChime(f,ac().currentTime+i*.08));
+  setTimeout(()=>{
+    Q.d4=true;Q.active=5;
+    fanfare();
+    toast(`✨ "${Q.word}" encoded — Texture added`);
+    comment(`"<em>${Q.word}</em>" — locked into this take forever. 🧵`);
+    doneTrack(3);unlockTrack(4);updPills();
+  },900);
+}
+
+/* =====================================================
+   Q5 — MASTER DIAL
+===================================================== */
+let dialVal=0,dialDrag=false,dialStart={y:0,v:0};
+
+function buildQ5(zone){
+  zone.innerHTML=`
+    <div class="qchip" style="border-color:var(--c2);color:var(--c2)">MASTER</div>
+    <div class="dial-wrap">
+      <canvas class="dial-canvas" id="dialcv" width="68" height="68" title="Drag up to turn"></canvas>
+      <div class="dial-info">
+        <div class="dial-hint">All tracks are in.<br>Turn the master dial to <b style="color:var(--c2)">0 dBFS</b> — drag <b style="color:var(--c2)">up</b>.</div>
+        <div class="dial-val" id="dialval">−∞</div>
+        <div class="dial-label">MASTER VOLUME</div>
+        <div class="dial-status" id="dialst">warming up…</div>
+      </div>
+      <button class="master-go" id="mgo" onclick="finQ5()" style="opacity:.2;pointer-events:none">⬡ &nbsp;Bounce to Stereo</button>
+    </div>`;
+  initDial();
+}
+
+function initDial(){
+  const cv=document.getElementById('dialcv');
+  if(!cv)return;
+  drawDial(0);
+
+  function setFromPoint(clientY){
+    const r=cv.getBoundingClientRect();
+    const t=(r.bottom-clientY)/r.height;
+    dialVal = Math.max(0, Math.min(1, t));
+    drawDial(dialVal);
+    updateDialUI();
+  }
+
+  cv.addEventListener('mousedown',e=>{dialDrag=true;dialStart={y:e.clientY,v:dialVal};e.preventDefault();});
+  document.addEventListener('mousemove',e=>{
+    if(!dialDrag)return;
+    const dy=dialStart.y-e.clientY;
+    dialVal=Math.max(0,Math.min(1,dialStart.v+dy/100));
+    drawDial(dialVal);updateDialUI();
+  });
+  document.addEventListener('mouseup',()=>dialDrag=false);
+
+  cv.addEventListener('click',e=>{
+    if(dialDrag) return;
+    setFromPoint(e.clientY);
+  });
+
+  cv.addEventListener('touchstart',e=>{dialDrag=true;dialStart={y:e.touches[0].clientY,v:dialVal};e.preventDefault();},{passive:false});
+  document.addEventListener('touchmove',e=>{
+    if(!dialDrag)return;
+    const dy=dialStart.y-e.touches[0].clientY;
+    dialVal=Math.max(0,Math.min(1,dialStart.v+dy/100));
+    drawDial(dialVal);updateDialUI();
+  },{passive:true});
+  document.addEventListener('touchend',()=>dialDrag=false);
+}
+
+function drawDial(v){
+  const cv=document.getElementById('dialcv');if(!cv)return;
+  const ctx=cv.getContext('2d'),W=cv.width,H=cv.height,cx=W/2,cy=H/2,r=W*.38;
+  ctx.clearRect(0,0,W,H);
+
+  const bg=ctx.createRadialGradient(cx,cy,0,cx,cy,r);
+  bg.addColorStop(0,'#242840');bg.addColorStop(1,'#161820');
+  ctx.beginPath();ctx.arc(cx,cy,r+3,0,Math.PI*2);ctx.fillStyle=bg;ctx.fill();
+
+  const start=Math.PI*.75,range=Math.PI*1.5;
+  ctx.beginPath();ctx.arc(cx,cy,r,start,start+range);
+  ctx.strokeStyle='#2a3255';ctx.lineWidth=5;ctx.lineCap='round';ctx.stroke();
+
+  if(v>0){
+    const color=v>.95?'#2ed4a0':v>.5?'#ffb833':'#9966ff';
+    ctx.beginPath();ctx.arc(cx,cy,r,start,start+range*v);
+    ctx.strokeStyle=color;ctx.lineWidth=5;ctx.lineCap='round';ctx.stroke();
+  }
+
+  const ang=start+range*v;
+  const dx=cx+r*Math.cos(ang),dy=cy+r*Math.sin(ang);
+  ctx.beginPath();ctx.arc(dx,dy,4,0,Math.PI*2);
+  ctx.fillStyle=v>.95?'#2ed4a0':'#edf0f8';ctx.fill();
+
+  ctx.fillStyle=v>.95?'#2ed4a0':'#586080';
+  ctx.font=`bold ${W*.14}px "DM Mono",monospace`;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(v>.95?'MAX':Math.round(v*100),cx,cy);
+}
+
+function updateDialUI(){
+  const val=document.getElementById('dialval'),st=document.getElementById('dialst'),mgo=document.getElementById('mgo');
+  if(!val||!st||!mgo)return;
+  if(dialVal<.01){val.textContent='−∞';st.textContent='warming up…';st.classList.remove('peak');}
+  else if(dialVal<.5){val.textContent=Math.round(-40+dialVal*80)+' dB';st.textContent='getting there…';st.classList.remove('peak');}
+  else if(dialVal<.95){val.textContent=Math.round(-40+dialVal*80)+' dB';st.textContent='almost there… keep going';st.classList.remove('peak');}
+  else{val.textContent='0 dBFS';st.textContent='🔥 PEAK — ready to bounce!';st.classList.add('peak');
+    mgo.style.opacity='1';mgo.style.pointerEvents='all';}
+  if(dialVal>.01)sBass(ac().currentTime,Math.floor(dialVal*4));
+}
+
+function finQ5(){
+  if(dialVal<.95)return;
+  Q.d5=true;
+  fanfare();
+  doneTrack(4);updPills();
+  toast('🌹 Session complete — ready to export!');
+  comment(`<em>Vivasvan.</em> okay. press export. and don’t act shy.`);
+  setTimeout(()=>{
+    const eb=document.getElementById('expbtn');
+    if(eb){eb.classList.add('go');eb.textContent='❧  Master & Export ★';}
+  },500);
+}
+
+/* =====================================================
+   EXPORT → BLOOM FLOW
+===================================================== */
+function doExport(){
+  if(!Q.d5)return;
+
+  // make sure the reveal theme is correct before drawing
+  applyMoodTheme();
+
+  ac();
+  if(MG)MG.gain.setTargetAtTime(.16,ac().currentTime,1.8);
+  if(RW)RW.gain.setTargetAtTime(.62,ac().currentTime,2.2);
+  if(RD)RD.gain.setTargetAtTime(.38,ac().currentTime,2.2);
+  if(!playing){playing=true;nxt=ac().currentTime+.05;seq();}
+
+  const fl=document.createElement('div');
+  fl.style.cssText='position:fixed;inset:0;z-index:9999;background:#fff;opacity:0;transition:opacity .18s;pointer-events:none';
+  document.body.appendChild(fl);
+  requestAnimationFrame(()=>fl.style.opacity='1');
+  setTimeout(()=>fl.style.opacity='0',200);
+
+  setTimeout(()=>{
+    fl.remove();
+    document.getElementById('daw').classList.add('out');
+    const rv=document.getElementById('rv');
+    rv.classList.add('in');
+    requestAnimationFrame(()=>requestAnimationFrame(()=>rv.classList.add('vis')));
+    document.getElementById('cb').style.display='block';
+    document.getElementById('cp').style.display='block';
+    startBloom();
+    startParticles();
+    setTimeout(()=>document.getElementById('close-rv').classList.add('show'),6200);
+  },380);
+}
+
+function closeReveal(){
+  document.getElementById('rv').style.transition='opacity .6s';
+  document.getElementById('rv').style.opacity='0';
+  document.getElementById('nlayer').classList.remove('show');
+  document.getElementById('close-rv').classList.remove('show');
+  document.getElementById('cb').style.display='none';
+  document.getElementById('cp').style.display='none';
+  document.getElementById('daw').classList.remove('out');
+  if(MG)MG.gain.setTargetAtTime(.85,ac().currentTime,.8);
+  setTimeout(()=>{
+    const rv=document.getElementById('rv');
+    rv.classList.remove('in','vis');
+    rv.style.opacity='';
+  },650);
+}
+
+/* =====================================================
+   REVEAL NOTE (mood-specific)
+===================================================== */
+function fillWord(){
+  const e=document.getElementById('ncword');
+  if(e && Q.word){
+    e.textContent=`you encoded "${Q.word}" into this take. it lives here forever. 🧵`;
+    e.classList.add('show');
+  }
+}
+
+function resetValentineUI(){
+  const vbtns=document.getElementById('vbtns');
+  const vresp=document.getElementById('vresp');
+  if(vbtns) vbtns.style.display='flex';
+  if(vresp){vresp.textContent='♡'; vresp.classList.remove('show');}
+  // ensure NO button is visible but “unclickable”
+  const vno=document.getElementById('vno');
+  if(vno){
+    vno.style.position='static';
+    vno.style.left='';
+    vno.style.top='';
+  }
+}
+
+function revealNote(){
+  applyMoodTheme();
+  resetValentineUI();
+  fillWord();
+
+  const m = MOODS[SELECTED_MOOD] || MOODS.perfect;
+  document.getElementById('sess-name').textContent = m.sessionName;
+  document.getElementById('nch').innerHTML = m.header;
+  document.getElementById('nctag').textContent = m.tag;
+  document.getElementById('memoryBody').innerHTML = m.memoryHTML;
+  document.getElementById('memoryEmbed').innerHTML = m.embedHTML;
+
+  setTimeout(()=>{
+    const nl=document.getElementById('nlayer');nl.classList.add('show');
+    requestAnimationFrame(()=>requestAnimationFrame(()=>document.getElementById('ncard').classList.add('in')));
+  },1000);
+}
+
+/* =====================================================
+   BLOOM + PARTICLES (mood palette; triggers revealNote)
+===================================================== */
+function startBloom(){
+  const cv=document.getElementById('cb'),ctx=cv.getContext('2d');
+  cv.width=innerWidth;cv.height=innerHeight;
+  const W=cv.width,H=cv.height;
+
+  const m = MOODS[SELECTED_MOOD] || MOODS.perfect;
+  const th = (m.theme || MOODS.perfect.theme);
+
+  const WARM = th.bloomWarm;
+  const GRN  = th.bloomGreen;
+
+  const rw=()=>WARM[~~(Math.random()*WARM.length)];
+  const rg=()=>GRN[~~(Math.random()*GRN.length)];
+  const flowers=[],petals=[];
+  const ORI=[
+    {x:0,y:0,s:66,d:0},{x:W,y:0,s:62,d:100},{x:0,y:H,s:64,d:200},{x:W,y:H,s:68,d:300},
+    {x:W*.5,y:0,s:54,d:460},{x:W*.5,y:H,s:56,d:570},{x:0,y:H*.5,s:52,d:700},{x:W,y:H*.5,s:52,d:820},
+  ];
+  ORI.forEach(o=>{
+    const cnt=1+~~(Math.random()*2);
+    for(let k=0;k<cnt;k++){
+      const sc=o.s*.8;
+      spF(o.x+(Math.random()-.5)*sc,o.y+(Math.random()-.5)*sc,o.d+k*180,o.s*(.68+Math.random()*.46));
+    }
+  });
+  function spF(x,y,dl,sz){
+    setTimeout(()=>flowers.push({
+      x,y,sz,stemP:0,openP:0,
+      sL:sz*1.9,sT:Math.max(1.2,sz*.052),sC:(Math.random()-.5)*sz*.38,
+      pN:5+~~(Math.random()*4),pL:sz*.75,
+      col:rw(),sc:rg(),
+      rot:Math.random()*Math.PI*2,rotV:(Math.random()-.5)*.002,
+      sw:Math.random()*Math.PI*2,swV:.007+Math.random()*.005,swA:sz*.038,op:0
+    }),dl);
+  }
+
+  setInterval(()=>{
+    petals.push({x:Math.random()*W,y:-12,vx:(Math.random()-.5)*1.5,vy:.8+Math.random()*1.3,
+      sz:6+Math.random()*12,col:rw(),rot:Math.random()*Math.PI*2,rotV:(Math.random()-.5)*.09,
+      op:.5+Math.random()*.5,wb:Math.random()*Math.PI*2,wbV:.017+Math.random()*.022});
+  },88);
+
+  function dStem(f){
+    if(f.stemP<=0)return;
+    const sw=Math.sin(f.sw)*f.swA*Math.min(f.stemP,1);
+    const bY=f.y+f.sL,tY=bY-f.sL*f.stemP;
+    const cx=f.x+f.sC*f.stemP,cy=bY-f.sL*.5;
+    const[r,g,b]=f.sc;
+    ctx.save();ctx.globalAlpha=Math.min(f.op*1.5,.95);ctx.strokeStyle=`rgb(${r},${g},${b})`;ctx.lineWidth=f.sT;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(f.x,bY);ctx.quadraticCurveTo(cx,cy,f.x+sw,tY);ctx.stroke();
+    ctx.restore();
+  }
+  function dOpen(f){
+    const sw=Math.sin(f.sw)*f.swA,t=f.openP,len=f.pL*t;
+    const[pr,pg,pb]=f.col,[sr,sg,sb]=f.sc;
+    ctx.save();ctx.translate(f.x+sw,f.y);ctx.rotate(f.rot);
+    for(let p=0;p<f.pN;p++){
+      ctx.save();ctx.rotate((p/f.pN)*Math.PI*2);ctx.rotate((1-t)*.52);
+      ctx.globalAlpha=f.op*(.78+t*.2);ctx.fillStyle=`rgba(${pr},${pg},${pb},1)`;
+      ctx.beginPath();ctx.moveTo(0,0);ctx.bezierCurveTo(len*.27,-len*.24,len*.30,-len*.68,0,-len);ctx.bezierCurveTo(-len*.30,-len*.68,-len*.27,-len*.24,0,0);ctx.fill();
+      ctx.restore();
+    }
+    ctx.globalAlpha=f.op*Math.max(0,1-t*2.4);
+    for(let s=0;s<3;s++){
+      ctx.save();
+      ctx.rotate((s/3)*Math.PI*2);
+      ctx.fillStyle=`rgba(${sr},${sg},${sb},1)`;
+      ctx.beginPath();
+      ctx.ellipse(0,-f.sz*.065,f.sz*.057,f.sz*.16,0,0,Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+  function dPetal(p){
+    const[r,g,b]=p.col;
+    ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.rot);
+    ctx.globalAlpha=p.op*.82;ctx.fillStyle=`rgba(${r},${g},${b},1)`;
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    ctx.bezierCurveTo(p.sz*.30,-p.sz*.24,p.sz*.32,-p.sz*.70,0,-p.sz);
+    ctx.bezierCurveTo(-p.sz*.32,-p.sz*.70,-p.sz*.30,-p.sz*.24,0,0);
+    ctx.fill();ctx.restore();
+  }
+
+  const SP={stem:.018,open:.012};
+  let shown=false;
+  (function loop(){
+    ctx.clearRect(0,0,W,H);
+    flowers.forEach(f=>{
+      f.op=Math.min(f.op+.022,1);f.rot+=f.rotV;f.sw+=f.swV;
+      f.stemP=Math.min(f.stemP+SP.stem,1); dStem(f);
+      f.openP=Math.min(f.openP+SP.open,1); dOpen(f);
+    });
+    for(let i=petals.length-1;i>=0;i--){
+      const p=petals[i];p.wb+=p.wbV;p.x+=p.vx+Math.sin(p.wb)*.55;p.y+=p.vy;p.rot+=p.rotV;
+      if(p.y>H+16){petals.splice(i,1);continue;} dPetal(p);
+    }
+    if(!shown && flowers.some(f=>f.openP>.72)){shown=true;revealNote();}
+    requestAnimationFrame(loop);
+  })();
+  window.addEventListener('resize',()=>{cv.width=innerWidth;cv.height=innerHeight;});
+}
+
+function startParticles(){
+  const cv=document.getElementById('cp'),ctx=cv.getContext('2d');
+  cv.width=innerWidth;cv.height=innerHeight;
+  const W=cv.width,H=cv.height;
+
+  const m = MOODS[SELECTED_MOOD] || MOODS.perfect;
+  const th = (m.theme || MOODS.perfect.theme);
+  const COLS = th.particles;
+
+  const ps=[];
+  for(let i=0;i<90;i++) ps.push(mkP(true));
+  setInterval(()=>{if(ps.length<140)ps.push(mkP(false));},320);
+  function mkP(init){
+    return{
+      x:Math.random()*W,
+      y:init?Math.random()*H:H+10,
+      vx:(Math.random()-.5)*.38,
+      vy:-(0.28+Math.random()*.72),
+      r:1.4+Math.random()*3.6,
+      op:Math.random()*.6,
+      maxOp:.22+Math.random()*.44,
+      rising:true,
+      col:COLS[~~(Math.random()*COLS.length)]
+    };
+  }
+  (function loop(){
+    ctx.clearRect(0,0,W,H);
+    for(let i=ps.length-1;i>=0;i--){
+      const p=ps[i];p.x+=p.vx+Math.sin(p.y*.018)*.18;p.y+=p.vy;
+      if(p.rising){p.op=Math.min(p.op+.004,p.maxOp);if(p.op>=p.maxOp)p.rising=false;}
+      else{p.op=Math.max(p.op-.0018,0);}
+      if(p.y<-12||p.op<=0){ps.splice(i,1);continue;}
+      const[r,g,b]=p.col;
+      ctx.save();ctx.globalAlpha=p.op*.35;
+      const grd=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r*3.2);
+      grd.addColorStop(0,`rgba(${r},${g},${b},1)`);
+      grd.addColorStop(1,`rgba(${r},${g},${b},0)`);
+      ctx.fillStyle=grd;ctx.beginPath();ctx.arc(p.x,p.y,p.r*3.2,0,Math.PI*2);ctx.fill();
+      ctx.globalAlpha=p.op;ctx.fillStyle=`rgba(${r},${g},${b},1)`;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();
+      ctx.restore();
+    }
+    requestAnimationFrame(loop);
+  })();
+  window.addEventListener('resize',()=>{cv.width=innerWidth;cv.height=innerHeight;});
+}
+
+/* =====================================================
+   VALENTINE BUTTONS (NO visible but can’t click)
+===================================================== */
+function sayYes(){
+  const vbtns=document.getElementById('vbtns');
+  if(vbtns) vbtns.style.display='none';
+  const r=document.getElementById('vresp');
+  if(r){ r.textContent='I knew it. ♡'; r.classList.add('show'); }
+  launchHearts();
+}
+
+function noRun(){
+  const btn=document.getElementById('vno'),wrap=document.getElementById('vbtns');
+  if(!btn||!wrap)return;
+  const wr=wrap.getBoundingClientRect();
+  btn.style.position='absolute';
+  btn.style.left=Math.max(0,Math.random()*(wr.width-btn.offsetWidth-8))+'px';
+  btn.style.top=Math.max(0,Math.random()*(wr.height-btn.offsetHeight-4))+'px';
+}
+
+(function lockNoButton(){
+  const vno=document.getElementById('vno');
+  if(!vno) return;
+  vno.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); noRun(); }, true);
+})();
+
+function launchHearts(){
+  const chars=['♡','♥','❤️','💕','💖','🌹','✨'];
+  for(let i=0;i<32;i++){
+    setTimeout(()=>{
+      const h=document.createElement('div');
+      h.textContent=chars[Math.floor(Math.random()*chars.length)];
+      const sz=15+Math.random()*26;
+      h.style.cssText=`position:fixed;left:${10+Math.random()*80}vw;top:${20+Math.random()*55}vh;font-size:${sz}px;pointer-events:none;z-index:500;animation:hpop ${1.2+Math.random()*.9}s ease forwards;`;
+      document.body.appendChild(h);
+      setTimeout(()=>h.remove(),2500);
+    },i*80);
+  }
+}
+
+/* =====================================================
+   CLOCK
+===================================================== */
+let clkS=0;
+function tickClk(){
+  if(playing)clkS++;
+  const h=String(~~(clkS/3600)).padStart(2,'0'),
+        m=String(~~((clkS%3600)/60)).padStart(2,'0'),
+        s=String(clkS%60).padStart(2,'0');
+  document.getElementById('clk').textContent=`${h}:${m}:${s}`;
+  setTimeout(tickClk,1000);
+}
+
+/* =====================================================
+   MOOD FLOW: pick mood → build session → export → reveal
+===================================================== */
+function renderMoodGate(){
+  document.getElementById('mood_thomso').innerHTML = MOODS.thomso.gateHTML;
+  document.getElementById('mood_perfect').innerHTML = MOODS.perfect.gateHTML;
+  document.getElementById('mood_mixtape').innerHTML = MOODS.mixtape.gateHTML;
+}
+
+function pickMood(key){
+  SELECTED_MOOD = key;
+
+  // apply theme immediately (so close button/card colors match before reveal)
+  applyMoodTheme();
+
+  // user gesture: unlock audio context on first click
+  try{ ac().resume?.(); }catch(e){}
+
+  // show daw, hide gate
+  document.getElementById('moodGate').style.display='none';
+  document.getElementById('daw').style.display='flex';
+
+  // reset everything for a fresh session
+  resetSession();
+
+  const m = MOODS[key];
+  document.getElementById('sess-name').textContent = m.sessionName;
+  BPM = m.bpm; document.getElementById('bpmv').textContent = BPM;
+
+  toast(`🎚 Mood selected — "${m.sessionName}"`);
+  comment(`okay <em>Vivasvan</em>… build the ${key} take. no pressure. (lying.)`);
+
+  buildQuestPills();
+  buildTracks();
+  updPills();
+}
+
+function resetSession(){
+  stopPlay();
+  clkS=0; document.getElementById('clk').textContent='00:00:00';
+
+  Q.d1=Q.d2=Q.d3=Q.d4=Q.d5=false;
+  Q.word=''; Q.active=1;
+
+  metOn=false; clearTimeout(metTimer); metBeat=0; tapIdx=0; tapOK=0; tapActive=false;
+  q2check=false; fdrag=false; fval=0;
+  prog=0;
+  dialVal=0; dialDrag=false;
+
+  const eb=document.getElementById('expbtn');
+  eb.classList.remove('go'); eb.textContent='❧  Master & Export';
+
+  document.getElementById('rv').classList.remove('in','vis');
+  document.getElementById('rv').style.opacity='';
+  document.getElementById('nlayer').classList.remove('show');
+  document.getElementById('ncard').classList.remove('in');
+  document.getElementById('close-rv').classList.remove('show');
+  document.getElementById('cb').style.display='none';
+  document.getElementById('cp').style.display='none';
+
+  document.getElementById('memoryEmbed').innerHTML='';
+  const w=document.getElementById('ncword'); w.classList.remove('show'); w.textContent='';
+
+  resetValentineUI();
+}
+
+function tryAnother(){
+  closeReveal();
+  backToMoods();
+}
+
+function backToMoods(){
+  resetSession();
+  document.getElementById('daw').style.display='none';
+  document.getElementById('moodGate').style.display='flex';
+  toast('Pick another mood session ✨');
+}
+
+/* =====================================================
+   INIT
+===================================================== */
+window.addEventListener('DOMContentLoaded',()=>{
+  renderMoodGate();
+  buildQuestPills();
+  animVU();
+  tickClk();
+  setTimeout(()=>toast('🎛️ Valentine.als ready — choose a mood to begin'),650);
+});
+</script>
+
+</body>
+</html>
